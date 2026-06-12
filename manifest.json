@@ -1,6 +1,6 @@
 {
-  "name": "TETRIS Pro",
-  "short_name": "TETRIS",
+  "name": "Blocks Pro",
+  "short_name": "Blocks",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
