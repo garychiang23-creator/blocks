@@ -1,7 +1,7 @@
 'use strict';
 // 離線快取：HTML 走「網路優先」（有網拿最新版），其餘「快取優先」
 // 改版時把 CACHE 版本號 +1，舊快取會自動清掉
-const CACHE = 'blocks-v2';
+const CACHE = 'blocks-v3';
 const ASSETS = [
   './',
   './index.html',
@@ -31,7 +31,7 @@ self.addEventListener('fetch', e => {
   const isHtml = req.mode === 'navigate' || (req.headers.get('accept') || '').includes('text/html');
   if (isHtml) {
     e.respondWith(
-      fetch(req)
+      fetch(new Request(req.url, { cache: 'reload', credentials: 'same-origin' }))   // 跳過 HTTP 快取（Pages 送 max-age=600），網路優先才是真的拿最新版
         .then(res => {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(req, copy));

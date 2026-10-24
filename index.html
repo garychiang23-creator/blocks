@@ -133,9 +133,29 @@ function saveBest(m) { try { localStorage.setItem('tetris2_best_' + m, String(be
 // ===== 音訊引擎 =====
 let audioCtx = null;
 function audio() {
-  if (!audioCtx) { try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
-  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  const on = settings.music || settings.sfx;
+  if (!audioCtx) { if (on) unmuteIOS(); try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) {} }
+  if (audioCtx && audioCtx.state === 'suspended') { if (on) unmuteIOS(); audioCtx.resume(); }
   return audioCtx;
+}
+// iPhone 的網頁聲音預設跟著側邊靜音開關走（開著靜音就完全沒聲音）。把聲音模式設成「播放」才會照樣出聲：
+// iOS 17 起用 navigator.audioSession；沒有這個功能的舊版 iOS，改成循環播一段無聲音檔來切換（要在點擊裡才播得動）。
+// 代價：手機上正在放的音樂會被暫停，所以音樂、音效都關掉時不切換。
+let unmuteTag = null;
+function unmuteIOS() {
+  try { if (navigator.audioSession) { navigator.audioSession.type = 'playback'; return; } } catch (e) {}
+  if (!unmuteTag) {
+    const ios = /iP(hone|od|ad)/.test(navigator.platform || '') || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    if (!ios || typeof Audio === 'undefined') return;
+    const n = 4000, v = new DataView(new ArrayBuffer(44 + n)), w = (o, s) => { for (let i = 0; i < s.length; i++) v.setUint8(o + i, s.charCodeAt(i)); };
+    w(0, 'RIFF'); v.setUint32(4, 36 + n, true); w(8, 'WAVEfmt '); v.setUint32(16, 16, true); v.setUint16(20, 1, true); v.setUint16(22, 1, true);
+    v.setUint32(24, 8000, true); v.setUint32(28, 8000, true); v.setUint16(32, 1, true); v.setUint16(34, 8, true); w(36, 'data'); v.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) v.setUint8(44 + i, 128);
+    unmuteTag = new Audio(URL.createObjectURL(new Blob([v], { type: 'audio/wav' })));
+    unmuteTag.loop = true;
+    unmuteTag.setAttribute('x-webkit-airplay', 'deny');
+  }
+  if (unmuteTag.paused) unmuteTag.play().catch(() => {});
 }
 function beep(freq, dur, type, vol, slide) {
   const a = audio(); if (!a || !freq) return;
@@ -307,8 +327,8 @@ const stars = Array.from({ length: 90 }, () => ({
 // ===== 鍵盤 =====
 window.addEventListener('keydown', e => {
   const k = e.key;
-  if (k === 'm' || k === 'M') { settings.music = !settings.music; saveSettings(); return; }
-  if (k === 's' || k === 'S') { settings.sfx = !settings.sfx; saveSettings(); return; }
+  if (k === 'm' || k === 'M') { settings.music = !settings.music; saveSettings(); if (settings.music) unmuteIOS(); return; }
+  if (k === 's' || k === 'S') { settings.sfx = !settings.sfx; saveSettings(); if (settings.sfx) unmuteIOS(); return; }
   if (k === 'g' || k === 'G') { settings.ghost = !settings.ghost; saveSettings(); return; }
 
   if (state === 'menu') {
@@ -1329,7 +1349,8 @@ requestAnimationFrame(loop);
 // ===== PWA Service Worker =====
 if ('serviceWorker' in navigator && location.protocol.indexOf('http') === 0) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('./sw.js').catch(() => {});
+    // updateViaCache:'none' 不能省：GitHub Pages 對 sw.js 送 max-age=600，少了它新版 service worker 會一直裝不上
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
   });
 }
 </script>
